@@ -9,11 +9,10 @@
 
 
 
-import { Schema, model } from 'mongoose';
+import { Collection, Schema,  model } from 'mongoose';
 
-// Defines the Mongoose schema and model for the Movie collection
-
-interface IMovie {
+interface IMovie
+{
     movieID: string,
     title: string,
     studio: string,
@@ -24,32 +23,61 @@ interface IMovie {
     year: number,
     length: number,
     shortDescription: string,
-    mpaRating: string,
-    posterLink: string,
+    mpaRating: number,
     criticsRating: number
 }
 
-
-
-let movieSchema = new Schema<IMovie>({
-    movieID: String,
-    title: String,
-    studio: String,
-    genres: [String],
-    directors: [String],
-    writers: [String],
-    actors: [String],
-    year: Number,
-    length: Number,
-    shortDescription: String,
-    mpaRating: String,
-    posterLink: String,
-    criticsRating: Number
-});
-
-
-// Creating a Movie model using the movie schema
-
+const movieSchema = new Schema<IMovie>({
+    movieID: {
+      type: String,
+      required: true
+    },
+    title: {
+      type: String,
+      required: true
+    },
+    studio: {
+      type: String,
+      required: true
+    },
+    genres: {
+      type: [String],
+      required: true
+    },
+    directors: {
+      type: [String],
+      required: true
+    },
+    writers: {
+      type: [String],
+      required: true
+    },
+    actors: {
+      type: [String],
+      required: true
+    },
+    year: {
+      type: Number,
+      required: true
+    },
+    length: {
+      type: Number,
+      required: true
+    },
+    shortDescription: {
+      type: String,
+      required: true
+    },
+    mpaRating: {
+        type: Number,
+        required: true
+      },
+      criticsRating: {
+        type: Number,
+        required: true
+      },
+      
+    });
 let Movie = model<IMovie>('Movie', movieSchema);
 
 export default Movie;

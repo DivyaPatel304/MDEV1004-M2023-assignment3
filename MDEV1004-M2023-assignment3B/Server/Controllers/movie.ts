@@ -10,180 +10,278 @@
 
 import { Request, Response, NextFunction } from 'express';
 import passport from 'passport';
+import mongoose from 'mongoose';
+
 import User from '../Models/user';
+
 import Movie from '../Models/movie';
 
-// Utility function
-function SanitizeArray(unsanitizedArray: string[]): string[] {
-    let sanitizedArray: string[] = Array<string>();
+import { GenerateToken } from '../Util/index';
 
-    for (const unsanitizedString of unsanitizedArray) {
-        sanitizedArray.push(unsanitizedString.trim());
+// Utility Function
+function SanitizeArray(unsanitizedValue: string | string[]): string[] 
+{
+    if (Array.isArray(unsanitizedValue)) 
+    {
+        return unsanitizedValue.map((value) => value.trim());
+    } else if (typeof unsanitizedValue === "string") 
+    {
+        return unsanitizedValue.split(",").map((value) => value.trim());
+    } else {
+        return [];
     }
-    return sanitizedArray;
 }
 
-/* Authentication functions */
-export function ProcessRegistration(req: Request, res: Response, next: NextFunction): void {
+/* Authentication Functions */
+
+export function ProcessRegistration(req:Request, res:Response, next:NextFunction): void
+{
     // instantiate a new user object
     let newUser = new User
-        ({
-            username: req.body.username,
-            emailAddress: req.body.EmailAddress,
-            displayName: req.body.FirstName + " " + req.body.LastName
-        });
+    ({
+        username: req.body.username,
+        emailAddress: req.body.EmailAddress,
+        displayName: req.body.FirstName + " " + req.body.LastName 
+    });
 
-    User.register(newUser, req.body.password, (err) => {
-        if (err) {
+    User.register(newUser, req.body.password, (err) => 
+    {
+        if(err instanceof mongoose.Error.ValidationError)
+        {
+            console.error('All Fields Are Required');
+            return res.json({success: false, msg: 'ERROR: User Not Registered. All Fields Are Required'});
+        }
+
+
+        if(err){
             console.error('Error: Inserting New User');
-            if (err.name == "UserExistsError") {
-                console.error('Error: User Already Exists');
+            if(err.name == "UserExistsError")
+            {
+               console.error('Error: User Already Exists');
             }
-            return res.json({ success: false, msg: 'User not Registered Successfully!' })
+            return res.json({success: false, msg: 'User not Registered Successfully!'});
         }
         // if we had a front-end (Angular, React or a Mobile UI)...
-        //return res.json({ success: true, msg: 'User Registered Successfully!' });
-
-        // automatically login the user
-        return passport.authenticate('local')(req, res, () => {
-            return res.json({ success: true, msg: 'User Logged in Successfully!', user: newUser });
-        });
+        return res.json({success: true, msg: 'User Registered Successfully!'});
     });
 }
 
-
-export function ProcessLogin(req: Request, res: Response, next: NextFunction): void {
-    passport.authenticate('local', (err: any, user: any, info: any) => {
+export function ProcessLogin(req:Request, res:Response, next:NextFunction): void
+{
+    passport.authenticate('local', (err:any, user:any, info:any) => {
         // are there server errors?
-        if (err) {
+        if(err)
+        {
             console.error(err);
             return next(err);
         }
+
         // are the login errors?
-        if (!user) {
-            return res.json({ success: false, msg: 'User Not Logged in Successfully!'});
+        if(!user)
+        {
+			return res.json({success: false, msg: 'ERROR: User Not Logged in.'});
         }
-        req.login(user, (err) => {
-            // are there DB errors?
-            if (err) {
+
+        req.logIn(user, (err) =>
+        {
+            // are there db errors?
+            if(err)
+            {
                 console.error(err);
-                return next(err);
+                res.end(err);
             }
 
-            // if we had a front-end (like Angular or React or Mobile UI)...
-            return res.json({ success: true, msg: 'User Logged in Successfully!'});
+            const authToken = GenerateToken(user);
+
+            return res.json({success: true, msg: 'User Logged In Successfully!', user: {
+                id: user._id,
+                displayName: user.displayName,
+                username: user.username,
+                emailAddress: user.emailAddress
+            }, token: authToken});
         });
+        return;
     })(req, res, next);
 }
 
-export function ProcessLogout(req: Request, res: Response, next: NextFunction): void {
-    req.logout(() => {
+export function ProcessLogout(req:Request, res:Response, next:NextFunction): void
+{
+    req.logout(() =>{
         console.log("User Logged Out");
-
     });
+    
     // if we had a front-end (Angular, React or Mobile UI)...
-    res.json({ success: true, msg: 'User Logged out Successfully!' });
+    res.json({success: true, msg: 'User Logged out Successfully!'});
+
 }
-
-
 
 
 /* API Functions */
-export  function DisplayMovieList(req: Request, res: Response, next: NextFunction): void{
-     Movie.find({})
-    .then(function(data){
-        res.json(data);
-    })
-    .catch(function(err){
-        console.error(err);
-    });
-    
-}
-
-export  function DisplayMovieByID(req: Request, res: Response, next: NextFunction): void{
-    let id = req.params.id;
-     Movie.find({_id:id})
-   .then(function(data){
-       res.json(data);
-   })
-   .catch(function(err){
-       console.error(err);
-   });
-   
-}
-
-export function AddMovie(req: Request, res: Response, next: NextFunction): void{
-
-    let genres = SanitizeArray((req.body.genre as string).split(","));
-    let writers = SanitizeArray((req.body.writers as string).split(","));
-    let directors = SanitizeArray((req.body.director as string).split(","));
-    let actors = SanitizeArray((req.body.actors as string).split(","));
-    let movie = new Movie({
-        movieID: req.body.movieID,
-        title: req.body.title,
-        studio: req.body.studio,
-        genres: genres,
-        directors: directors,
-        writers: writers,
-        actors: actors,
-        length: req.body.length,
-        year: req.body.year,
-        shortDescription: req.body.shortDescription,
-        mpaRating: req.body.mpaRating,
-        criticsRating: req.body.criticsRating
-     });
-
-     Movie.create(movie)
-    .then(function(){
-        res.json(movie);
-    })
-    .catch(function(err){
-        console.error(err);
-    });
-}
-
-export  function UpdateMovie(req: Request, res: Response, next: NextFunction): void{
-        let id = req.params.id;
-        let genres = SanitizeArray((req.body.genre as string).split(","));
-        let writers = SanitizeArray((req.body.writers as string).split(","));
-        let directors = SanitizeArray((req.body.director as string).split(","));
-        let actors = SanitizeArray((req.body.actors as string).split(","));
-        
-        let movieToUpdate = new Movie({
-            _id: id,
-            movieID: req.body.movieID,
-            title: req.body.title,
-            studio: req.body.studio,
-            genres: genres,
-            directors: directors,
-            writers: writers,
-            actors: actors,
-            length: req.body.length,
-            year: req.body.year,
-            shortDescription: req.body.shortDescription,
-            mpaRating: req.body.mpaRating,
-            criticsRating: req.body.criticsRating
-         });
-
-         Movie.updateOne({_id: id}, movieToUpdate)
-         .then(function(){
-             res.json(movieToUpdate);
-         })
-         .catch(function(err)
+export function DisplayMovieList(req: Request, res: Response, next: NextFunction): void
 {
-             console.error(err);
-         });
-        }
+    Movie.find({})
+    .then(function(data)
+    {
+        res.status(200).json({success: true, msg: "Movie List Displayed Successfully", data: data});
+    })
+    .catch(function(err)
+    {
+        console.error(err);
+        res.status(500).json({success: false, msg: "ERROR: Something Went Wrong", data: null});
+    });
+}
 
-export  function DeleteMovie(req: Request, res: Response, next: NextFunction): void{
+export function DisplayMovieByID(req: Request, res: Response, next: NextFunction): void
+{
+    try
+    {
         let id = req.params.id;
-        Movie.deleteOne({_id: id})
-        .then(function(){
-            res.json(id);
+        Movie.findById({_id: id})
+        .then(function(data)
+        {
+            if(data)
+            {
+                res.status(200).json({success: true, msg: "Movie Retrieved by ID Successfully", data: data});
+            }
+            else
+            {
+                res.status(404).json({success: false, msg: "Movie ID Not Found", data: data});
+            }
+            
         })
-        .catch(function(err){
+        .catch(function(err)
+        {
             console.error(err);
+            res.status(400).json({success: false, msg: "ERROR: Movie ID not formatted correctly", data: null});
         });
+    }
+    catch(err)
+    {
+        console.error(err);
+        res.status(500).json({success: false, msg: "ERROR: Something Went Wrong", data: null});
+    }
+}
 
+export function AddMovie(req: Request, res: Response, next: NextFunction): void
+{
+    try
+    {
+        let genres = SanitizeArray(req.body.genres);
+        let directors = SanitizeArray(req.body.directors);
+        let writers = SanitizeArray(req.body.writers);
+        let actors = SanitizeArray(req.body.actors);
+    
+        let movie = new Movie({
+           movieID: req.body.movieID,
+           title: req.body.title,
+           studio: req.body.studio,
+           genres: genres,
+           directors: directors,
+           writers: writers,
+           actors: actors,
+           length: req.body.length,
+           year: req.body.year,
+           shortDescription: req.body.shortDescription,
+           mpaRating: req.body.mpaRating,
+           criticsRating: req.body.criticsRating
+        });
+    
+        Movie.create(movie)
+        .then(function()
+        {
+            res.status(200).json({success: true, msg: "Movie Added Successfully", data:movie});
+        })
+        .catch(function(err)
+        {
+            console.error(err);
+            if(err instanceof mongoose.Error.ValidationError)
+            {
+                res.status(400).json({success: false, msg: "ERROR: Movie Not Added. All Fields are required", data:null});
+            }
+            else
+            {
+                res.status(400).json({success: false, msg: "ERROR: Movie Not Added.", data:null});
+            }
+        });
+    }
+    catch(err)
+    {
+        console.error(err);
+        res.status(500).json({success: false, msg: "Something Went Wrong", data: null});
+    }
+}
 
+export function UpdateMovie(req: Request, res: Response, next: NextFunction): void
+{
+    try
+    {
+        let id = req.params.id;
+        let genres = SanitizeArray(req.body.genres);
+        let directors = SanitizeArray(req.body.directors);
+        let writers = SanitizeArray(req.body.writers);
+        let actors = SanitizeArray(req.body.actors);
+    
+        let movieToUpdate = new Movie({
+           _id: id,
+           movieID: req.body.movieID,
+           title: req.body.title,
+           studio: req.body.studio,
+           genres: genres,
+           directors: directors,
+           writers: writers,
+           actors: actors,
+           length: req.body.length,
+           year: req.body.year,
+           shortDescription: req.body.shortDescription,
+           mpaRating: req.body.mpaRating,
+           criticsRating: req.body.criticsRating
+        });
+    
+        Movie.updateOne({_id: id}, movieToUpdate)
+        .then(function()
+        {
+            res.status(200).json({success: true, msg: "Movie Updated Successfully", data:movieToUpdate});
+        })
+        .catch(function(err)
+        {
+            console.error(err);
+            if(err instanceof mongoose.Error.ValidationError)
+            {
+                res.status(400).json({success: false, msg: "ERROR: Movie Not Updated. All Fields are required", data:null});
+            }
+            else
+            {
+                res.status(400).json({success: false, msg: "ERROR: Movie Not Updated.", data:null});
+            }
+        });
+    }
+    catch(err)
+    {
+        console.error(err);
+        res.status(500).json({success: false, msg: "Something Went Wrong", data: null});
+    }
+}
+
+export function DeleteMovie(req: Request, res: Response, next: NextFunction): void
+{
+    try
+    {
+        let id = req.params.id;
+
+        Movie.deleteOne({_id: id})
+        .then(function()
+        {
+            res.status(200).json({success: true, msg: "Movie Deleted Successfully", data:id});
+        })
+        .catch(function(err)
+        {
+            console.error(err);
+            res.status(400).json({success: false, msg: "ERROR: Movie ID not formatted correctly", data: null});
+        });
+    }
+    catch(err)
+    {
+        console.error(err);
+        res.status(500).json({success: false, msg: "ERROR: Something Went Wrong", data: null});
+    }
 }

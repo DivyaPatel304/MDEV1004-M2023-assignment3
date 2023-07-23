@@ -12,7 +12,7 @@
 
 import app from './Server/Config/app';
 import debug from 'debug';
-debug('mdev1004-m2023-assignment3:server');
+debug('mdev1004-m2023-firstassignment:server');
 import http from 'http';
 import { AddressInfo } from 'net';
 import { HttpError } from 'http-errors';
